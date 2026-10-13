@@ -1,5 +1,5 @@
 name: Build Huda School APK
-
+  run: yes | flet build apk --arch arm64-v8a --verbose
 on:
   workflow_dispatch:
   push:
