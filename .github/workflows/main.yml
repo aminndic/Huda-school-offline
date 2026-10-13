@@ -1,5 +1,4 @@
 name: Build Huda School APK
-
 on:
   workflow_dispatch:
   push:
