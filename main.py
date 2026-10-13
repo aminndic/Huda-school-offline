@@ -24,13 +24,10 @@ DB_NAME = "students.db"
 
 
 def get_data_dir(page: ft.Page):
-    # أندرويد: استخدم متغير البيئة أولاً
     path = os.environ.get("FLET_APP_STORAGE_DATA")
     if path and os.path.exists(os.path.dirname(path)):
         os.makedirs(path, exist_ok=True)
         return path
-
-    # فلت 1.x: جرب page.app_data_dir
     try:
         path = page.app_data_dir
         if path:
@@ -38,8 +35,6 @@ def get_data_dir(page: ft.Page):
             return path
     except Exception:
         pass
-
-    # سطح المكتب فقط
     path = os.path.join(os.path.expanduser("~"), ".huda_school")
     os.makedirs(path, exist_ok=True)
     return path
@@ -86,6 +81,8 @@ def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.window_width = 1000
     page.window_height = 800
+
+    is_android = os.environ.get("FLET_PLATFORM", "").lower() == "android"
 
     conn = connect_db()
     selected_student_id = None
@@ -137,8 +134,11 @@ def main(page: ft.Page):
 
         if not rows:
             students_column.controls.append(
-                ft.Container(content=ft.Text("لا توجد بيانات بعد. أضف طالباً جديداً.", color="#667085"),
-                                                          padding=20, alignment=ft.Alignment(0, 0))
+                ft.Container(
+                    content=ft.Text("لا توجد بيانات بعد. أضف طالباً جديداً.", color="#667085"),
+                    padding=20,
+                    alignment=ft.Alignment(0, 0)
+                )
             )
         for row in rows:
             total = sum(float(row[k] or 0) for k in ("arabic", "math", "english", "physics"))
@@ -313,8 +313,16 @@ def main(page: ft.Page):
         except Exception as ex:
             show_message(f"تعذر استيراد الملف: {ex}", True)
 
-    file_picker = ft.FilePicker(on_result=import_excel_result)
-    page.overlay.append(file_picker)
+    # FilePicker يعمل فقط على سطح المكتب
+    if not is_android:
+        file_picker = ft.FilePicker(on_result=import_excel_result)
+        page.overlay.append(file_picker)
+
+    def open_file_picker(e):
+        if is_android:
+            show_message("استيراد Excel غير متاح على أندرويد حالياً.", True)
+        else:
+            file_picker.pick_files(allowed_extensions=["xlsx"], allow_multiple=False)
 
     save_button = ft.FilledButton("إضافة الطالب", icon=ft.Icons.SAVE, on_click=save_student)
 
@@ -337,9 +345,7 @@ def main(page: ft.Page):
             ft.Row([
                 save_button,
                 ft.OutlinedButton("مسح الحقول", icon=ft.Icons.CLEAR, on_click=lambda e: clear_form()),
-                ft.OutlinedButton("استيراد Excel", icon=ft.Icons.UPLOAD_FILE,
-                                  on_click=lambda e: file_picker.pick_files(
-                                      allowed_extensions=["xlsx"], allow_multiple=False)),
+                ft.OutlinedButton("استيراد Excel", icon=ft.Icons.UPLOAD_FILE, on_click=open_file_picker),
                 ft.OutlinedButton("تصدير Excel", icon=ft.Icons.DOWNLOAD, on_click=export_excel),
             ], wrap=True),
         ], spacing=12),
