@@ -1,0 +1,24 @@
+[project]
+name = "huda-school-offline"
+version = "1.0.0"
+description = "Offline student and grades management app for مدرسة الهدى الثانوية بنين"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "flet",
+    "openpyxl",
+    "reportlab",
+    "arabic-reshaper",
+    "python-bidi",
+]
+
+[tool.flet]
+org = "org.aminndic"
+product = "مدرسة الهدى الثانوية بنين"
+company = "مدرسة الهدى الثانوية بنين"
+copyright = "Copyright 2026"
+
+[tool.flet.app]
+path = "."
+
+[tool.flet.android]
+min_sdk_version = 23
