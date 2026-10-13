@@ -138,7 +138,7 @@ def main(page: ft.Page):
         if not rows:
             students_column.controls.append(
                 ft.Container(content=ft.Text("لا توجد بيانات بعد. أضف طالباً جديداً.", color="#667085"),
-                             padding=20, alignment=ft.alignment.center)
+                                                          padding=20, alignment=ft.Alignment(0, 0))
             )
         for row in rows:
             total = sum(float(row[k] or 0) for k in ("arabic", "math", "english", "physics"))
