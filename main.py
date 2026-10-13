@@ -23,15 +23,16 @@ SUBJECTS = ["اللغة العربية", "الرياضيات", "اللغة ال�
 DB_NAME = "students.db"
 
 
-def get_data_dir():
-    # Keep the database in the app's writable local folder on Android/Desktop.
+def get_data_dir(page: ft.Page):
+    # استخدم page.app_data_dir — يعطي المسار الصحيح على أندرويد وسطح المكتب
     try:
-        path = ft.app_storage_path()
+        path = page.app_data_dir
         if path:
             os.makedirs(path, exist_ok=True)
             return path
     except Exception:
         pass
+    # fallback للتطوير فقط
     path = os.path.join(os.path.expanduser("~"), ".huda_school")
     os.makedirs(path, exist_ok=True)
     return path
@@ -70,7 +71,8 @@ def shape_arabic(text):
 
 def main(page: ft.Page):
     global DB_PATH
-    DB_PATH = os.path.join(get_data_dir(), DB_NAME)
+    # ✅ الآن نمرر page للدالة
+    DB_PATH = os.path.join(get_data_dir(page), DB_NAME)
     page.title = APP_TITLE
     page.rtl = True
     page.theme_mode = ft.ThemeMode.LIGHT
@@ -226,7 +228,6 @@ def main(page: ft.Page):
         pdf = canvas.Canvas(path, pagesize=A4)
         width, height = A4
 
-        # Include assets/Amiri-Regular.ttf to enable correct Arabic PDF shaping.
         font_path = os.path.join(os.path.dirname(__file__), "assets", "Amiri-Regular.ttf")
         try:
             if os.path.exists(font_path):
@@ -260,7 +261,7 @@ def main(page: ft.Page):
         pdf.setFont(font_name, 10)
         pdf.drawCentredString(width / 2, 65, shape_arabic("إدارة المدرسة"))
         pdf.save()
-        show_message(f"تم إنشاء ملف PDF في: {path}. إذا لم يظهر العربية بشكل صحيح، أضف خط Amiri إلى مجلد assets.")
+        show_message(f"تم إنشاء ملف PDF في: {path}")
         try:
             page.launch_url("file://" + path)
         except Exception:
