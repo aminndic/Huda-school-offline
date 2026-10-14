@@ -1,41 +1,45 @@
-name: Build Huda School APK
+name: Build Huda School APK (Flet)
 
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Get project files
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
-      - name: Force flet version in pyproject
-        run: |
-          sed -i -E 's/"flet(>=[^"]*|==[^"]*)?"/"flet==0.28.3"/' pyproject.toml
-          echo "---- pyproject.toml ----"
-          cat pyproject.toml
-          grep -q '"flet==0.28.3"' pyproject.toml
+      - name: Set up Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
 
       - name: Install Flet
+        # استبدل 0.23.0 (أو الرقم المناسب لديك) برقم الإصدار الصحيح
         run: |
           python -m pip install --upgrade pip
-          pip install "flet==0.28.3" "flet-cli==0.28.3"
-          pip show flet
+          python -m pip install flet
 
-      - name: Build Android APK
-        run: flet build apk --arch arm64-v8a --verbose
+      - name: Build APK
+        run: flet build apk -v
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: huda-school-apk-${{ github.run_number }}
-          path: build/apk/*.apk
-          if-no-files-found: error
+          name: huda-school-apk
+          # المسار الصحيح غالباً ما يكون هكذا في مشاريع Flet/Flutter:
+          path: build/app/outputs/flutter-apk/*.apk
