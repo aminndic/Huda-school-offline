@@ -4,26 +4,57 @@ import traceback
 from datetime import datetime
 
 import flet as ft
-from openpyxl import Workbook, load_workbook
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-except Exception:
-    arabic_reshaper = None
-    get_display = None
-
-
+APP_VERSION = "v3"
 APP_TITLE = "مدرسة الهدى الثانوية بنين"
 SUBJECTS = ["اللغة العربية", "الرياضيات", "اللغة الإنجليزية", "الفيزياء"]
 DB_NAME = "students.db"
 
+LIBS = {}
+LIB_ERRORS = []
 
-def get_data_dir(page: ft.Page):
+
+def load_libs():
+    """استيراد المكتبات الثقيلة مع تسجيل أي فشل بدل إيقاف التطبيق."""
+    try:
+        from openpyxl import Workbook, load_workbook
+        LIBS["Workbook"] = Workbook
+        LIBS["load_workbook"] = load_workbook
+    except Exception as ex:
+        LIB_ERRORS.append(f"openpyxl: {ex}")
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        LIBS["A4"] = A4
+        LIBS["canvas"] = canvas
+        LIBS["pdfmetrics"] = pdfmetrics
+        LIBS["TTFont"] = TTFont
+    except Exception as ex:
+        LIB_ERRORS.append(f"reportlab: {ex}")
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        LIBS["reshaper"] = arabic_reshaper
+        LIBS["get_display"] = get_display
+    except Exception as ex:
+        LIB_ERRORS.append(f"arabic-reshaper/bidi: {ex}")
+
+
+def shape_arabic(text):
+    text = str(text or "")
+    reshaper = LIBS.get("reshaper")
+    get_display = LIBS.get("get_display")
+    if reshaper and get_display:
+        try:
+            return get_display(reshaper.reshape(text))
+        except Exception:
+            return text
+    return text
+
+
+def get_data_dir():
     path = os.environ.get("FLET_APP_STORAGE_DATA")
     if path:
         try:
@@ -38,21 +69,19 @@ def get_data_dir(page: ft.Page):
 
 def get_output_dir(data_dir, is_android):
     """مجلد حفظ ملفات PDF وExcel."""
-    candidates = []
     if is_android:
-        candidates.append("/storage/emulated/0/Download")
+        folder = "/storage/emulated/0/Download"
     else:
-        candidates.append(os.path.join(os.path.expanduser("~"), "Downloads"))
-    for folder in candidates:
-        try:
-            if os.path.isdir(folder):
-                test = os.path.join(folder, ".huda_test")
-                with open(test, "w") as f:
-                    f.write("x")
-                os.remove(test)
-                return folder
-        except Exception:
-            continue
+        folder = os.path.join(os.path.expanduser("~"), "Downloads")
+    try:
+        if os.path.isdir(folder):
+            test = os.path.join(folder, ".huda_test")
+            with open(test, "w") as f:
+                f.write("x")
+            os.remove(test)
+            return folder
+    except Exception:
+        pass
     folder = os.path.join(data_dir, "exports")
     os.makedirs(folder, exist_ok=True)
     return folder
@@ -79,27 +108,10 @@ def connect_db():
     return conn
 
 
-def shape_arabic(text):
-    text = str(text or "")
-    if arabic_reshaper and get_display:
-        try:
-            return get_display(arabic_reshaper.reshape(text))
-        except Exception:
-            return text
-    return text
-
-
 def build_app(page: ft.Page):
     global DB_PATH
-    data_dir = get_data_dir(page)
+    data_dir = get_data_dir()
     DB_PATH = os.path.join(data_dir, DB_NAME)
-    page.title = APP_TITLE
-    page.rtl = True
-    page.theme_mode = ft.ThemeMode.LIGHT
-    page.padding = 14
-    page.scroll = ft.ScrollMode.AUTO
-    page.window_width = 1000
-    page.window_height = 800
 
     is_android = page.platform == ft.PagePlatform.ANDROID
     out_dir = get_output_dir(data_dir, is_android)
@@ -250,7 +262,15 @@ def build_app(page: ft.Page):
         show_message(message)
 
     def make_pdf(row):
+        if "canvas" not in LIBS:
+            show_message("مكتبة PDF (reportlab) غير متوفرة على هذا الجهاز.", True)
+            return
         try:
+            A4 = LIBS["A4"]
+            canvas = LIBS["canvas"]
+            pdfmetrics = LIBS["pdfmetrics"]
+            TTFont = LIBS["TTFont"]
+
             path = os.path.join(out_dir, f"huda_student_{row['id']}.pdf")
             pdf = canvas.Canvas(path, pagesize=A4)
             width, height = A4
@@ -306,7 +326,11 @@ def build_app(page: ft.Page):
                 pass
 
     def export_excel(_):
+        if "Workbook" not in LIBS:
+            show_message("مكتبة Excel (openpyxl) غير متوفرة على هذا الجهاز.", True)
+            return
         try:
+            Workbook = LIBS["Workbook"]
             rows = conn.execute(
                 "SELECT id,name,class_name,arabic,math,english,physics FROM students ORDER BY id"
             ).fetchall()
@@ -325,6 +349,9 @@ def build_app(page: ft.Page):
     def import_excel_result(e: ft.FilePickerResultEvent):
         if not e.files:
             return
+        if "load_workbook" not in LIBS:
+            show_message("مكتبة Excel (openpyxl) غير متوفرة على هذا الجهاز.", True)
+            return
         path = e.files[0].path
         if not path:
             show_message("تعذر الوصول إلى الملف المختار.", True)
@@ -333,7 +360,7 @@ def build_app(page: ft.Page):
             show_message("اختر ملف Excel بامتداد .xlsx فقط.", True)
             return
         try:
-            wb = load_workbook(path, data_only=True)
+            wb = LIBS["load_workbook"](path, data_only=True)
             ws = wb.active
             imported = 0
             for row in ws.iter_rows(min_row=2, values_only=True):
@@ -353,10 +380,9 @@ def build_app(page: ft.Page):
         except Exception as ex:
             show_message(f"تعذر استيراد الملف: {ex}", True)
 
-    # FilePicker (flet 0.28.3): يُضاف إلى overlay ثم update
+    # FilePicker (flet 0.28.3): يُضاف إلى overlay
     file_picker = ft.FilePicker(on_result=import_excel_result)
     page.overlay.append(file_picker)
-    page.update()
 
     def open_file_picker(e):
         try:
@@ -396,9 +422,18 @@ def build_app(page: ft.Page):
         padding=16, bgcolor="#F9F5FF", border_radius=12,
     )
 
-    page.add(
-        header,
-        ft.Container(height=8),
+    controls = [header, ft.Container(height=8)]
+    if LIB_ERRORS:
+        controls.append(
+            ft.Container(
+                content=ft.Text(
+                    "تنبيه: تعذر تحميل بعض المكتبات:\n" + "\n".join(LIB_ERRORS),
+                    color="#B42318", size=12, selectable=True,
+                ),
+                padding=10, bgcolor="#FEF3F2", border_radius=8,
+            )
+        )
+    controls += [
         form,
         ft.Text("سجل الطلاب", size=20, weight=ft.FontWeight.BOLD),
         search_box,
@@ -406,22 +441,37 @@ def build_app(page: ft.Page):
         students_column,
         ft.Text("تنبيه: البيانات تحفظ في قاعدة SQLite داخل مساحة التطبيق على هذا الجهاز.",
                 size=11, color="#667085"),
-    )
+        ft.Text(f"الإصدار {APP_VERSION}", size=11, color="#98A2B3"),
+    ]
+
+    page.controls.clear()
+    page.add(*controls)
     search_box.on_change = refresh_students
     refresh_students()
 
 
 def main(page: ft.Page):
+    page.title = APP_TITLE
+    page.rtl = True
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.padding = 14
+    page.scroll = ft.ScrollMode.AUTO
+    page.window_width = 1000
+    page.window_height = 800
+
+    # يظهر فوراً: إن رأيته فالواجهة تعمل وبايثون يعمل
+    page.add(ft.Text(f"جاري تشغيل التطبيق... ({APP_VERSION})", size=16))
+    page.update()
+
     try:
+        load_libs()
         build_app(page)
     except Exception:
-        page.scroll = ft.ScrollMode.AUTO
+        page.controls.clear()
         page.add(
             ft.Text(
                 "حدث خطأ أثناء تشغيل التطبيق:\n\n" + traceback.format_exc(),
-                color="#B42318",
-                size=12,
-                selectable=True,
+                color="#B42318", size=12, selectable=True,
             )
         )
         page.update()
