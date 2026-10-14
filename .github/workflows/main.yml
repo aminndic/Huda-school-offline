@@ -24,7 +24,12 @@ jobs:
 
       - name: Clear Flet cache
         run: rm -rf ~/.flet/cache
-
+      - name: Download Arabic font (Amiri)
+        run: |
+          mkdir -p assets
+          curl -L -o assets/Amiri-Regular.ttf https://github.com/google/fonts/raw/main/ofl/amiri/Amiri-Regular.ttf
+          cp assets/Amiri-Regular.ttf Amiri-Regular.ttf
+          ls -la assets Amiri-Regular.ttf
       - name: Build Android APK
         run: yes | flet build apk --arch arm64-v8a --verbose
 
