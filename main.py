@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import traceback
 from datetime import datetime
 
 import flet as ft
@@ -88,7 +89,7 @@ def shape_arabic(text):
     return text
 
 
-def main(page: ft.Page):
+def build_app(page: ft.Page):
     global DB_PATH
     data_dir = get_data_dir(page)
     DB_PATH = os.path.join(data_dir, DB_NAME)
@@ -106,8 +107,8 @@ def main(page: ft.Page):
     conn = connect_db()
     selected_student_id = None
     status = ft.Text("", color="#146C43")
-    search_box = ft.TextField(label="بحث باسم الطالب أو الفصل", prefix_icon=ft.Icons.SEARCH, expand=True)
-    name_box = ft.TextField(label="اسم الطالب", expand=True)
+    search_box = ft.TextField(label="بحث باسم الطالب أو الفصل", prefix_icon=ft.Icons.SEARCH, width=320)
+    name_box = ft.TextField(label="اسم الطالب", width=320)
     class_box = ft.TextField(label="الفصل", width=150)
     arabic_box = ft.TextField(label="العربية", value="0", width=110, keyboard_type=ft.KeyboardType.NUMBER)
     math_box = ft.TextField(label="الرياضيات", value="0", width=110, keyboard_type=ft.KeyboardType.NUMBER)
@@ -399,10 +400,8 @@ def main(page: ft.Page):
         header,
         ft.Container(height=8),
         form,
-        ft.Row([
-            ft.Text("سجل الطلاب", size=20, weight=ft.FontWeight.BOLD),
-            search_box,
-        ], vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
+        ft.Text("سجل الطلاب", size=20, weight=ft.FontWeight.BOLD),
+        search_box,
         status,
         students_column,
         ft.Text("تنبيه: البيانات تحفظ في قاعدة SQLite داخل مساحة التطبيق على هذا الجهاز.",
@@ -410,6 +409,22 @@ def main(page: ft.Page):
     )
     search_box.on_change = refresh_students
     refresh_students()
+
+
+def main(page: ft.Page):
+    try:
+        build_app(page)
+    except Exception:
+        page.scroll = ft.ScrollMode.AUTO
+        page.add(
+            ft.Text(
+                "حدث خطأ أثناء تشغيل التطبيق:\n\n" + traceback.format_exc(),
+                color="#B42318",
+                size=12,
+                selectable=True,
+            )
+        )
+        page.update()
 
 
 if __name__ == "__main__":
