@@ -254,15 +254,22 @@ def main(page: ft.Page):
             pdf = canvas.Canvas(path, pagesize=A4)
             width, height = A4
 
-            font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "Amiri-Regular.ttf")
-            try:
-                if os.path.exists(font_path):
-                    pdfmetrics.registerFont(TTFont("Amiri", font_path))
-                    font_name = "Amiri"
-                else:
-                    font_name = "Helvetica"
-            except Exception:
-                font_name = "Helvetica"
+            base = os.path.dirname(os.path.abspath(__file__))
+            candidates = [
+                os.path.join(base, "Amiri-Regular.ttf"),
+                os.path.join(base, "assets", "Amiri-Regular.ttf"),
+            ]
+            if os.environ.get("FLET_ASSETS_DIR"):
+                candidates.append(os.path.join(os.environ["FLET_ASSETS_DIR"], "Amiri-Regular.ttf"))
+            font_name = "Helvetica"
+            for font_path in candidates:
+                try:
+                    if os.path.exists(font_path):
+                        pdfmetrics.registerFont(TTFont("Amiri", font_path))
+                        font_name = "Amiri"
+                        break
+                except Exception:
+                    continue
 
             pdf.setFont(font_name, 18)
             pdf.drawCentredString(width / 2, height - 70, shape_arabic(APP_TITLE))
