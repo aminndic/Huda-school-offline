@@ -26,10 +26,10 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.44.8' # مطابقة الإصدار الذي يطلبه Flet لمنع ظهور مشكلة التوقف التفاعلي
           cache: true
 
       - name: Install Flet
-        # استبدل 0.23.0 (أو الرقم المناسب لديك) برقم الإصدار الصحيح
         run: |
           python -m pip install --upgrade pip
           python -m pip install flet
@@ -41,5 +41,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: huda-school-apk
-          # المسار الصحيح غالباً ما يكون هكذا في مشاريع Flet/Flutter:
           path: build/app/outputs/flutter-apk/*.apk
