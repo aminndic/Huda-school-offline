@@ -2,7 +2,7 @@
 name = "huda-school-offline"
 version = "1.0.0"
 description = "Offline student and grades management app for مدرسة الهدى الثانوية بنين"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
     "flet==0.28.3",
     "openpyxl",
