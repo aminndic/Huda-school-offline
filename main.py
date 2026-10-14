@@ -1,6 +1,5 @@
 import os
 import sqlite3
-import tempfile
 from datetime import datetime
 
 import flet as ft
@@ -25,19 +24,37 @@ DB_NAME = "students.db"
 
 def get_data_dir(page: ft.Page):
     path = os.environ.get("FLET_APP_STORAGE_DATA")
-    if path and os.path.exists(os.path.dirname(path)):
-        os.makedirs(path, exist_ok=True)
-        return path
-    try:
-        path = page.app_data_dir
-        if path:
+    if path:
+        try:
             os.makedirs(path, exist_ok=True)
             return path
-    except Exception:
-        pass
+        except Exception:
+            pass
     path = os.path.join(os.path.expanduser("~"), ".huda_school")
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def get_output_dir(data_dir, is_android):
+    """مجلد حفظ ملفات PDF وExcel."""
+    candidates = []
+    if is_android:
+        candidates.append("/storage/emulated/0/Download")
+    else:
+        candidates.append(os.path.join(os.path.expanduser("~"), "Downloads"))
+    for folder in candidates:
+        try:
+            if os.path.isdir(folder):
+                test = os.path.join(folder, ".huda_test")
+                with open(test, "w") as f:
+                    f.write("x")
+                os.remove(test)
+                return folder
+        except Exception:
+            continue
+    folder = os.path.join(data_dir, "exports")
+    os.makedirs(folder, exist_ok=True)
+    return folder
 
 
 DB_PATH = None
@@ -73,7 +90,8 @@ def shape_arabic(text):
 
 def main(page: ft.Page):
     global DB_PATH
-    DB_PATH = os.path.join(get_data_dir(page), DB_NAME)
+    data_dir = get_data_dir(page)
+    DB_PATH = os.path.join(data_dir, DB_NAME)
     page.title = APP_TITLE
     page.rtl = True
     page.theme_mode = ft.ThemeMode.LIGHT
@@ -82,7 +100,8 @@ def main(page: ft.Page):
     page.window_width = 1000
     page.window_height = 800
 
-    is_android = os.environ.get("FLET_PLATFORM", "").lower() == "android"
+    is_android = page.platform == ft.PagePlatform.ANDROID
+    out_dir = get_output_dir(data_dir, is_android)
 
     conn = connect_db()
     selected_student_id = None
@@ -99,8 +118,10 @@ def main(page: ft.Page):
     def show_message(message, error=False):
         status.value = message
         status.color = "#B42318" if error else "#146C43"
-        page.snack_bar = ft.SnackBar(ft.Text(message))
-        page.snack_bar.open = True
+        try:
+            page.open(ft.SnackBar(ft.Text(message)))
+        except Exception:
+            pass
         page.update()
 
     def number(value):
@@ -137,7 +158,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.Text("لا توجد بيانات بعد. أضف طالباً جديداً.", color="#667085"),
                     padding=20,
-                    alignment=ft.Alignment(0, 0)
+                    alignment=ft.alignment.center,
                 )
             )
         for row in rows:
@@ -228,68 +249,79 @@ def main(page: ft.Page):
         show_message(message)
 
     def make_pdf(row):
-        temp_dir = tempfile.gettempdir()
-        safe_id = row["id"]
-        path = os.path.join(temp_dir, f"huda_student_{safe_id}.pdf")
-        pdf = canvas.Canvas(path, pagesize=A4)
-        width, height = A4
-
-        font_path = os.path.join(os.path.dirname(__file__), "assets", "Amiri-Regular.ttf")
         try:
-            if os.path.exists(font_path):
-                pdfmetrics.registerFont(TTFont("Amiri", font_path))
-                font_name = "Amiri"
-            else:
+            path = os.path.join(out_dir, f"huda_student_{row['id']}.pdf")
+            pdf = canvas.Canvas(path, pagesize=A4)
+            width, height = A4
+
+            font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "Amiri-Regular.ttf")
+            try:
+                if os.path.exists(font_path):
+                    pdfmetrics.registerFont(TTFont("Amiri", font_path))
+                    font_name = "Amiri"
+                else:
+                    font_name = "Helvetica"
+            except Exception:
                 font_name = "Helvetica"
-        except Exception:
-            font_name = "Helvetica"
 
-        pdf.setFont(font_name, 18)
-        pdf.drawCentredString(width / 2, height - 70, shape_arabic(APP_TITLE))
-        pdf.setFont(font_name, 15)
-        pdf.drawCentredString(width / 2, height - 110, shape_arabic("شهادة درجات طالب"))
-        pdf.setFont(font_name, 12)
-        y = height - 165
-        lines = [
-            f"اسم الطالب: {row['name']}",
-            f"الفصل: {row['class_name'] or '—'}",
-            f"اللغة العربية: {row['arabic'] or 0}",
-            f"الرياضيات: {row['math'] or 0}",
-            f"اللغة الإنجليزية: {row['english'] or 0}",
-            f"الفيزياء: {row['physics'] or 0}",
-            f"المجموع: {sum(float(row[k] or 0) for k in ('arabic','math','english','physics')):g} من 400",
-            f"تاريخ الإصدار: {datetime.now().strftime('%Y-%m-%d')}",
-        ]
-        for line in lines:
-            pdf.drawRightString(width - 55, y, shape_arabic(line))
-            y -= 32
-        pdf.line(55, y - 15, width - 55, y - 15)
-        pdf.setFont(font_name, 10)
-        pdf.drawCentredString(width / 2, 65, shape_arabic("إدارة المدرسة"))
-        pdf.save()
+            pdf.setFont(font_name, 18)
+            pdf.drawCentredString(width / 2, height - 70, shape_arabic(APP_TITLE))
+            pdf.setFont(font_name, 15)
+            pdf.drawCentredString(width / 2, height - 110, shape_arabic("شهادة درجات طالب"))
+            pdf.setFont(font_name, 12)
+            y = height - 165
+            lines = [
+                f"اسم الطالب: {row['name']}",
+                f"الفصل: {row['class_name'] or '—'}",
+                f"اللغة العربية: {row['arabic'] or 0}",
+                f"الرياضيات: {row['math'] or 0}",
+                f"اللغة الإنجليزية: {row['english'] or 0}",
+                f"الفيزياء: {row['physics'] or 0}",
+                f"المجموع: {sum(float(row[k] or 0) for k in ('arabic','math','english','physics')):g} من 400",
+                f"تاريخ الإصدار: {datetime.now().strftime('%Y-%m-%d')}",
+            ]
+            for line in lines:
+                pdf.drawRightString(width - 55, y, shape_arabic(line))
+                y -= 32
+            pdf.line(55, y - 15, width - 55, y - 15)
+            pdf.setFont(font_name, 10)
+            pdf.drawCentredString(width / 2, 65, shape_arabic("إدارة المدرسة"))
+            pdf.save()
+        except Exception as ex:
+            show_message(f"تعذر إنشاء PDF: {ex}", True)
+            return
         show_message(f"تم إنشاء ملف PDF في: {path}")
-        try:
-            page.launch_url("file://" + path)
-        except Exception:
-            pass
+        if not is_android:
+            try:
+                page.launch_url("file:///" + path.replace("\\", "/"))
+            except Exception:
+                pass
 
     def export_excel(_):
-        rows = conn.execute("SELECT id,name,class_name,arabic,math,english,physics FROM students ORDER BY id").fetchall()
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "الطلاب"
-        ws.append(["رقم", "اسم الطالب", "الفصل", "اللغة العربية", "الرياضيات", "اللغة الإنجليزية", "الفيزياء"])
-        for r in rows:
-            ws.append([r["id"], r["name"], r["class_name"], r["arabic"], r["math"], r["english"], r["physics"]])
-        path = os.path.join(tempfile.gettempdir(), "طلاب_مدرسة_الهدى.xlsx")
-        wb.save(path)
-        show_message(f"تم تصدير Excel إلى: {path}")
+        try:
+            rows = conn.execute(
+                "SELECT id,name,class_name,arabic,math,english,physics FROM students ORDER BY id"
+            ).fetchall()
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "الطلاب"
+            ws.append(["رقم", "اسم الطالب", "الفصل", "اللغة العربية", "الرياضيات", "اللغة الإنجليزية", "الفيزياء"])
+            for r in rows:
+                ws.append([r["id"], r["name"], r["class_name"], r["arabic"], r["math"], r["english"], r["physics"]])
+            path = os.path.join(out_dir, "huda_students.xlsx")
+            wb.save(path)
+            show_message(f"تم تصدير Excel إلى: {path}")
+        except Exception as ex:
+            show_message(f"تعذر التصدير: {ex}", True)
 
     def import_excel_result(e: ft.FilePickerResultEvent):
         if not e.files:
             return
         path = e.files[0].path
-        if not path or not path.lower().endswith(".xlsx"):
+        if not path:
+            show_message("تعذر الوصول إلى الملف المختار.", True)
+            return
+        if not path.lower().endswith(".xlsx"):
             show_message("اختر ملف Excel بامتداد .xlsx فقط.", True)
             return
         try:
@@ -297,7 +329,7 @@ def main(page: ft.Page):
             ws = wb.active
             imported = 0
             for row in ws.iter_rows(min_row=2, values_only=True):
-                if not row or not row[1]:
+                if not row or len(row) < 2 or not row[1]:
                     continue
                 name = str(row[1]).strip()
                 class_name = str(row[2] or "") if len(row) > 2 else ""
@@ -313,16 +345,20 @@ def main(page: ft.Page):
         except Exception as ex:
             show_message(f"تعذر استيراد الملف: {ex}", True)
 
-    # FilePicker يعمل فقط على سطح المكتب
-    if not is_android:
-        file_picker = ft.FilePicker(on_result=import_excel_result)
-        page.overlay.append(file_picker)
+    # FilePicker (flet 0.28.3): يُضاف إلى overlay ثم update
+    file_picker = ft.FilePicker(on_result=import_excel_result)
+    page.overlay.append(file_picker)
+    page.update()
 
     def open_file_picker(e):
-        if is_android:
-            show_message("استيراد Excel غير متاح على أندرويد حالياً.", True)
-        else:
-            file_picker.pick_files(allowed_extensions=["xlsx"], allow_multiple=False)
+        try:
+            file_picker.pick_files(
+                allowed_extensions=["xlsx"],
+                allow_multiple=False,
+                file_type=ft.FilePickerFileType.CUSTOM,
+            )
+        except Exception as ex:
+            show_message(f"تعذر فتح اختيار الملفات: {ex}", True)
 
     save_button = ft.FilledButton("إضافة الطالب", icon=ft.Icons.SAVE, on_click=save_student)
 
